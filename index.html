@@ -774,7 +774,8 @@
 
       const handleAdminLogin = (e) => {
         e.preventDefault();
-        if (adminPin === 'admin1') {
+        // Mengganti password dari 'admin1' menjadi ' admin1 ' (dengan spasi)
+        if (adminPin === ' admin1 ') {
           setIsAdminLoggedIn(true);
           showToast('Login Berhasil', 'success');
         } else showToast('PIN Salah', 'error');
