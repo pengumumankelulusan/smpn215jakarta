@@ -114,7 +114,7 @@
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
     );
 
-    // --- DATA SISWA INITIAL ---
+    // --- DATA CADANGAN LOKAL ---
     const INITIAL_STUDENTS = [
       { id: 1, nisn: "0012345678", name: "Budi Santoso", kelas: "IX A", status: "LULUS" },
       { id: 2, nisn: "0012345679", name: "Siti Aminah", kelas: "IX B", status: "LULUS" },
@@ -124,14 +124,13 @@
       { id: 6, nisn: "12345", name: "Siswa Uji Coba Sistem", kelas: "IX Admin", status: "LULUS" } 
     ];
 
-    // Diatur mulai 2 Juni 2026 pukul 10.00 WIB (Asia/Jakarta atau UTC+7)
+    // Diatur mulai 2 Juni 2026 pukul 10.00 WIB
     const ANNOUNCEMENT_DATE = new Date("2026-06-02T10:00:00+07:00").getTime();
     
     // URL Backend Google Apps Script
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbx9XCy4BkXd45uu5qyCmwcIqrCMw2mzXMy59Z4BHbGkRZYSOpz2AWDxQdf9DzQuo8RZ/exec"; 
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyDFayBV64NlGS9n_rO07smZRtGlS3I1UXejrShVHiM8xvBeMUTyhSnoRaFqQK4nVRH/exec"; 
 
-    // --- DEKLARASI KOMPONEN HELPER DI LUAR APP AGAR TIDAK RE-MOUNT (MENGATASI BUG FOCUS FORM) ---
-    
+    // --- DEKLARASI KOMPONEN HELPER ---
     const Toast = ({ toast }) => {
       if (!toast.show) return null;
       return (
@@ -223,7 +222,6 @@
 
     const HomePage = ({ setCurrentPath, isSystemActive, ANNOUNCEMENT_DATE }) => (
       <div className="min-h-[calc(100vh-80px)] bg-brand-50 dark:bg-brand-950 text-slate-800 dark:text-white flex flex-col items-center justify-center p-6 text-center relative overflow-hidden transition-colors duration-300">
-        {/* Background decorative blur circles */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/10 dark:bg-brand-600/20 rounded-full filter blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-sky-600/10 dark:bg-sky-600/20 rounded-full filter blur-[100px] pointer-events-none"></div>
 
@@ -241,7 +239,6 @@
 
     const CekKelulusanPage = ({ handleSearch, searchQuery, setSearchQuery, searchResult, downloadQR }) => (
       <div className="min-h-[calc(100vh-80px)] bg-brand-50 dark:bg-brand-950 p-6 flex flex-col items-center pt-12 relative overflow-hidden transition-colors duration-300">
-        {/* Background decorative blur circles */}
         <div className="absolute top-10 left-10 w-72 h-72 bg-brand-800/5 dark:bg-brand-800/10 rounded-full filter blur-[80px] pointer-events-none"></div>
         <div className="absolute bottom-10 right-10 w-72 h-72 bg-brand-600/5 dark:bg-brand-600/10 rounded-full filter blur-[80px] pointer-events-none"></div>
 
@@ -331,7 +328,6 @@
       adminPin, 
       setAdminPin, 
       studentsData, 
-      setStudentsData,
       isSystemActive, 
       setIsSystemActive,
       editingStudent,
@@ -340,10 +336,11 @@
       setDeletingStudent,
       updateStudent,
       deleteStudent,
+      handleUploadCSV,
+      isSyncing,
       showToast
     }) => {
       
-      // 👉 FUNGSI UNDUH TEMPLATE CSV MASSAL
       const handleDownloadTemplate = () => {
         const csvContent = "data:text/csv;charset=utf-8,nisn,name,kelas,status\n0012345683,Ahmad Faisal,IX D,LULUS\n0012345684,Siti Rahma,IX C,TIDAK LULUS\n0012345685,Rian Hidayat,IX B,DITUNDA";
         const encodedUri = encodeURI(csvContent);
@@ -354,61 +351,6 @@
         link.click();
         document.body.removeChild(link);
         showToast('Template CSV berhasil diunduh', 'success');
-      };
-
-      // 👉 FUNGSI IMPOR / UNGGAH CSV MASSAL DENGAN PARSER DETEKSI PEMISAH (KOMA ATAU TITIK KOMA)
-      const handleUploadCSV = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const text = evt.target.result;
-          const lines = text.split("\n").map(l => l.trim()).filter(l => l !== "");
-          
-          if (lines.length <= 1) {
-            showToast("File CSV kosong atau hanya berisi baris judul", "error");
-            return;
-          }
-
-          // Otomatis deteksi separator koma (,) atau titik koma (;) khas Excel Indonesia
-          const separator = lines[1].includes(';') ? ';' : ',';
-          const newStudents = [];
-
-          for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(separator);
-            if (cols.length < 4) continue;
-
-            const student = {
-              id: Date.now() + i,
-              nisn: cols[0]?.replace(/["']/g, '').trim(),
-              name: cols[1]?.replace(/["']/g, '').trim(),
-              kelas: cols[2]?.replace(/["']/g, '').trim(),
-              status: cols[3]?.replace(/["']/g, '').trim().toUpperCase()
-            };
-
-            // Validasi data dasar agar tidak rusak saat diimpor
-            if (student.nisn && student.name && student.kelas && ['LULUS', 'TIDAK LULUS', 'DITUNDA'].includes(student.status)) {
-              newStudents.push(student);
-            }
-          }
-
-          if (newStudents.length > 0) {
-            setStudentsData(prev => {
-              // Hindari penimpaan duplikasi NISN yang sudah ada sebelumnya
-              const existingNisns = new Set(prev.map(s => s.nisn));
-              const filteredNew = newStudents.filter(s => !existingNisns.has(s.nisn));
-              return [...prev, ...filteredNew];
-            });
-            showToast(`Berhasil menambahkan ${newStudents.length} data siswa secara massal!`, 'success');
-          } else {
-            showToast("Gagal mengimpor. Format isi CSV tidak valid/salah.", "error");
-          }
-        };
-
-        reader.readAsText(file);
-        // Reset file input agar bisa mendeteksi file yang sama kembali jika diunggah ulang
-        e.target.value = '';
       };
 
       if (!isAdminLoggedIn) {
@@ -436,6 +378,16 @@
       }
       return (
         <div className="p-4 md:p-8 bg-brand-50 dark:bg-brand-950 min-h-[calc(100vh-80px)] transition-colors duration-300">
+          {isSyncing && (
+            <div className="fixed inset-0 z-[110] bg-slate-900/60 flex flex-col items-center justify-center backdrop-blur-sm">
+              <div className="bg-white dark:bg-brand-900 p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-xs text-center border border-brand-200">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600 mb-4"></div>
+                <p className="font-bold text-slate-800 dark:text-white text-sm">Menyinkronkan ke Google Sheets...</p>
+                <p className="text-xs text-slate-500 mt-1">Mohon tunggu sebentar, jangan tutup halaman ini.</p>
+              </div>
+            </div>
+          )}
+
           <div className="max-w-7xl mx-auto animate-fade-in-up">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
               <div>
@@ -447,14 +399,13 @@
               </div>
             </div>
 
-            {/* BARU: FITUR INPUT MASSAL DENGAN CSV TEMPLATE & UPLOAD */}
             <div className="bg-white dark:bg-brand-900/40 backdrop-blur-md p-6 rounded-3xl shadow-xl border border-slate-200 dark:border-brand-800 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h3 className="font-bold text-lg uppercase tracking-tight flex items-center text-brand-900 dark:text-brand-300">
-                  📁 Input Massal Data Siswa (CSV)
+                  📁 Input Massal Data Siswa (CSV & Cloud Sync)
                 </h3>
                 <p className="text-slate-500 dark:text-brand-400 text-xs mt-1">
-                  Tambahkan puluhan hingga ratusan data siswa secara praktis sekaligus menggunakan file excel/CSV kustom.
+                  Tambahkan data siswa secara massal. Data otomatis akan diunggah ke Google Spreadsheet di Cloud.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 w-full md:w-auto">
@@ -471,7 +422,6 @@
               </div>
             </div>
 
-            {/* KONTROL AKTIF / NON-AKTIF AKSES SISTEM PENGUMUMAN */}
             <div className="bg-white dark:bg-brand-900/40 backdrop-blur-md p-6 rounded-3xl shadow-xl border border-slate-200 dark:border-brand-800 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="max-w-xl">
                 <h3 className="font-bold text-lg uppercase tracking-tight flex items-center text-brand-900 dark:text-brand-300">
@@ -623,28 +573,24 @@
       const [adminPin, setAdminPin] = useState('');
       const [studentsData, setStudentsData] = useState(INITIAL_STUDENTS);
       const [isLoadingData, setIsLoadingData] = useState(false);
+      const [isSyncing, setIsSyncing] = useState(false);
 
-      // 👉 TOMBOL AKTIF & NON-AKTIF AKSES SISTEM (Disimpan di localStorage)
       const [isSystemActive, setIsSystemActive] = useState(() => {
         return localStorage.getItem('isSystemActive') === 'true';
       });
 
-      // --- MODAL STATES ---
       const [editingStudent, setEditingStudent] = useState(null);
       const [deletingStudent, setDeletingStudent] = useState(null);
-
       const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
       const audioRef = useRef(null);
-      const fileInputRef = useRef(null);
       const hasAutoSearched = useRef(false);
 
-      // 👉 PERSISTENSI STATUS SISTEM AKTIF/NON-AKTIF
       useEffect(() => {
         localStorage.setItem('isSystemActive', isSystemActive);
       }, [isSystemActive]);
 
-      // 👉 FETCH DATA AWAL
+      // --- 🟢 GET DATA AWAL DARI BACKEND GOOGLE SHEET ---
       useEffect(() => {
         if (GAS_URL) {
           setIsLoadingData(true);
@@ -656,29 +602,26 @@
                   id: item.id || Date.now() + index,
                   ...item
                 }));
-                // Pastikan NISN 12345 tetap ada walaupun mengambil data dari Spreadsheet
                 const updatedData = [...formattedData];
                 if (!updatedData.some(s => s.nisn === "12345")) {
                   updatedData.push({ id: 99999, nisn: "12345", name: "Siswa Uji Coba Sistem", kelas: "IX Admin", status: "LULUS" });
                 }
                 setStudentsData(updatedData);
-                showToast('Data berhasil dimuat', 'success');
+                showToast('Database Google Sheets berhasil dimuat!', 'success');
               }
             })
-            .catch(() => showToast('Gagal memuat database', 'error'))
+            .catch(() => showToast('Gagal terhubung ke Google Sheets. Menggunakan database cadangan.', 'error'))
             .finally(() => setIsLoadingData(false));
         }
       }, []);
 
-      // 👉 AUTO-SEARCH DARI QR DENGAN CHECK STATUS WAKTU & STATUS SAKELAR SISTEM
+      // AUTO-SEARCH DARI QR DENGAN CHECK STATUS WAKTU
       useEffect(() => {
         if (hasAutoSearched.current || isLoadingData || studentsData.length === 0) return;
         const params = new URLSearchParams(window.location.search);
         const nisnParam = params.get('nisn');
         if (nisnParam) {
           hasAutoSearched.current = true;
-          
-          // Sistem dianggap rilis apabila waktu sudah lewat atau admin menyalakan sakelar "Aktif"
           const now = new Date().getTime();
           const isReleased = now >= ANNOUNCEMENT_DATE || isSystemActive;
 
@@ -705,10 +648,9 @@
 
       const showToast = (message, type = 'success') => {
         setToast({ show: true, message, type });
-        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 4000);
       };
 
-      // 👉 PERBAIKAN ERROR LAYAR PENUH
       const toggleFullscreen = () => {
         try {
           if (!document.fullscreenEnabled) {
@@ -749,7 +691,6 @@
         setMusicPlaying(!musicPlaying);
       };
 
-      // 👉 VALIDASI WAKTU PENGUMUMAN & BYPASS SAKELAR AKTIF & BYPASS "12345"
       const handleSearch = (e) => {
         e.preventDefault();
         if (!searchQuery.trim()) return showToast('Masukkan NISN', 'error');
@@ -757,7 +698,6 @@
         const now = new Date().getTime();
         const isReleased = now >= ANNOUNCEMENT_DATE || isSystemActive;
 
-        // Proteksi countdown waktu rilis, bypass jika sakelar Aktif ATAU NISN adalah '12345'
         if (!isReleased && searchQuery !== '12345') {
           showToast('Pengumuman Belum Dimulai!', 'error');
           setSearchResult('not_started');
@@ -774,24 +714,127 @@
 
       const handleAdminLogin = (e) => {
         e.preventDefault();
-        // Mengganti password dari 'admin1' menjadi ' admin1 ' (dengan spasi)
         if (adminPin === ' admin1 ') {
           setIsAdminLoggedIn(true);
           showToast('Login Berhasil', 'success');
         } else showToast('PIN Salah', 'error');
       };
 
-      // --- AKSI DATA ---
-      const deleteStudent = () => {
-        if (!deletingStudent) return;
-        setStudentsData(prev => prev.filter(s => s.id !== deletingStudent.id));
-        showToast(`Data ${deletingStudent.name} berhasil dihapus`, 'success');
-        setDeletingStudent(null);
+      // --- 🟢 AKSI DATA: IMPOR MASSAL (CSV) & KIRIM KE GOOGLE SPREADSHEET ---
+      const handleUploadCSV = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const text = evt.target.result;
+          const lines = text.split("\n").map(l => l.trim()).filter(l => l !== "");
+          
+          if (lines.length <= 1) {
+            showToast("File CSV kosong atau hanya berisi baris judul", "error");
+            return;
+          }
+
+          const separator = lines[1].includes(';') ? ';' : ',';
+          const newStudents = [];
+
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(separator);
+            if (cols.length < 4) continue;
+
+            const student = {
+              nisn: cols[0]?.replace(/["']/g, '').trim(),
+              name: cols[1]?.replace(/["']/g, '').trim(),
+              kelas: cols[2]?.replace(/["']/g, '').trim(),
+              status: cols[3]?.replace(/["']/g, '').trim().toUpperCase()
+            };
+
+            if (student.nisn && student.name && student.kelas && ['LULUS', 'TIDAK LULUS', 'DITUNDA'].includes(student.status)) {
+              newStudents.push(student);
+            }
+          }
+
+          if (newStudents.length > 0) {
+            setIsSyncing(true);
+            
+            // 👉 PERBAIKAN UTAMA: Kirim data menggunakan x-www-form-urlencoded untuk membypass masalah JSON Parsing pada GAS no-cors
+            const payload = {
+              action: 'bulkAdd',
+              students: JSON.stringify(newStudents) // Konversi array objek ke string JSON yang aman dikirim
+            };
+
+            const searchParams = new URLSearchParams();
+            for (const key in payload) {
+              searchParams.append(key, payload[key]);
+            }
+
+            fetch(GAS_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: searchParams.toString()
+            })
+            .then(() => {
+              setStudentsData(prev => {
+                const existingNisns = new Set(prev.map(s => s.nisn));
+                const filteredNew = newStudents.filter(s => !existingNisns.has(s.nisn)).map((s, idx) => ({
+                  id: Date.now() + idx,
+                  ...s
+                }));
+                return [...prev, ...filteredNew];
+              });
+              showToast(`Berhasil sinkronisasi ${newStudents.length} siswa baru ke Google Sheets!`, 'success');
+            })
+            .catch(err => {
+              console.error(err);
+              showToast('Gagal menyinkronkan data ke Google Sheets', 'error');
+            })
+            .finally(() => setIsSyncing(false));
+
+          } else {
+            showToast("Gagal mengimpor. Format isi file CSV tidak valid/salah.", "error");
+          }
+        };
+
+        reader.readAsText(file);
+        e.target.value = '';
       };
 
+      // --- 🟢 AKSI DATA: HAPUS DATA & DISINKRONKAN KE GOOGLE SPREADSHEET ---
+      const deleteStudent = () => {
+        if (!deletingStudent) return;
+        setIsSyncing(true);
+
+        const payload = {
+          action: 'delete',
+          nisn: deletingStudent.nisn
+        };
+
+        const searchParams = new URLSearchParams();
+        for (const key in payload) {
+          searchParams.append(key, payload[key]);
+        }
+
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: searchParams.toString()
+        })
+        .then(() => {
+          setStudentsData(prev => prev.filter(s => s.id !== deletingStudent.id));
+          showToast(`Data ${deletingStudent.name} berhasil dihapus dari Cloud`, 'success');
+          setDeletingStudent(null);
+        })
+        .catch(() => showToast('Gagal menghapus data di Google Sheets', 'error'))
+        .finally(() => setIsSyncing(false));
+      };
+
+      // --- 🟢 AKSI DATA: EDIT DATA & DISINKRONKAN KE GOOGLE SPREADSHEET ---
       const updateStudent = (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+        
         const updated = {
           ...editingStudent,
           name: formData.get('name'),
@@ -799,9 +842,32 @@
           kelas: formData.get('kelas'),
           status: formData.get('status')
         };
-        setStudentsData(prev => prev.map(s => s.id === updated.id ? updated : s));
-        showToast('Data berhasil diperbarui', 'success');
-        setEditingStudent(null);
+
+        setIsSyncing(true);
+
+        const payload = {
+          action: 'edit',
+          student: JSON.stringify(updated)
+        };
+
+        const searchParams = new URLSearchParams();
+        for (const key in payload) {
+          searchParams.append(key, payload[key]);
+        }
+
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: searchParams.toString()
+        })
+        .then(() => {
+          setStudentsData(prev => prev.map(s => s.id === updated.id ? updated : s));
+          showToast('Perubahan berhasil disimpan ke Cloud Google Sheets!', 'success');
+          setEditingStudent(null);
+        })
+        .catch(() => showToast('Gagal memperbarui data ke Google Sheets', 'error'))
+        .finally(() => setIsSyncing(false));
       };
 
       const downloadQR = (nisn) => {
@@ -856,7 +922,6 @@
                 adminPin={adminPin} 
                 setAdminPin={setAdminPin} 
                 studentsData={studentsData} 
-                setStudentsData={setStudentsData}
                 isSystemActive={isSystemActive} 
                 setIsSystemActive={setIsSystemActive}
                 editingStudent={editingStudent}
@@ -865,6 +930,8 @@
                 setDeletingStudent={setDeletingStudent}
                 updateStudent={updateStudent}
                 deleteStudent={deleteStudent}
+                handleUploadCSV={handleUploadCSV}
+                isSyncing={isSyncing}
                 showToast={showToast}
               />
             )}
